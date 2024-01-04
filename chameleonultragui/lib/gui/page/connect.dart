@@ -5,13 +5,20 @@ import 'package:chameleonultragui/helpers/general.dart';
 import 'package:chameleonultragui/main.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 // Localizations
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
-class ConnectPage extends StatelessWidget {
+class ConnectPage extends StatefulWidget {
   const ConnectPage({super.key});
 
+  @override
+  ConnectPageState createState() => ConnectPageState();
+}
+
+class ConnectPageState extends State<ConnectPage> with SingleTickerProviderStateMixin {
+  bool _foundDevices = false;
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<ChameleonGUIState>();
@@ -34,6 +41,7 @@ class ConnectPage extends StatelessWidget {
           return Text('${localizations.error}: ${snapshot.error}');
         } else {
           final (result as List<Chameleon>) = snapshot.data;
+          _foundDevices = result.isNotEmpty;
 
           return Scaffold(
             appBar: AppBar(
@@ -53,160 +61,217 @@ class ConnectPage extends StatelessWidget {
                       icon: const Icon(Icons.refresh),
                     ),
                   ),
-                  Expanded(
-                    child: GridView(
-                        padding: const EdgeInsets.all(20),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 1,
-                        ),
-                        scrollDirection: Axis.vertical,
-                        children: [
-                          ...result.map<Widget>((chameleonDevice) {
-                            return ElevatedButton(
-                              onPressed: () async {
-                                if (chameleonDevice.dfu) {
-                                  showDialog<String>(
-                                    context: context,
-                                    builder: (BuildContext context) =>
-                                        AlertDialog(
-                                      title:
-                                          Text(localizations.chameleon_is_dfu),
-                                      content: Text(
-                                          localizations.firmware_is_corrupted),
-                                      actions: <Widget>[
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                              context, localizations.cancel),
-                                          child: Text(localizations.cancel),
-                                        ),
-                                        TextButton(
-                                          onPressed: () async {
-                                            Navigator.pop(
-                                                context, localizations.flash);
-                                            appState.changesMade();
+                  if (_foundDevices)
+                    Expanded(
+                      child: GridView(
+                          padding: const EdgeInsets.all(20),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 1,
+                          ),
+                          scrollDirection: Axis.vertical,
+                          children: [
+                            ...result.map<Widget>((chameleonDevice) {
+                              return ElevatedButton(
+                                onPressed: () async {
+                                  if (chameleonDevice.dfu) {
+                                    showDialog<String>(
+                                      context: context,
+                                      builder: (BuildContext context) =>
+                                          AlertDialog(
+                                        title: Text(
+                                            localizations.chameleon_is_dfu),
+                                        content: Text(localizations
+                                            .firmware_is_corrupted),
+                                        actions: <Widget>[
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                                context, localizations.cancel),
+                                            child: Text(localizations.cancel),
+                                          ),
+                                          TextButton(
+                                            onPressed: () async {
+                                              Navigator.pop(
+                                                  context, localizations.flash);
+                                              appState.changesMade();
 
-                                            scaffoldMessenger
-                                                .hideCurrentSnackBar();
+                                              scaffoldMessenger
+                                                  .hideCurrentSnackBar();
 
-                                            var snackBar = SnackBar(
-                                              content: Text(
-                                                  localizations.downloading_fw(
-                                                      chameleonDeviceName(
-                                                          chameleonDevice
-                                                              .device))),
-                                              action: SnackBarAction(
-                                                label: localizations.close,
-                                                onPressed: () {
-                                                  scaffoldMessenger
-                                                      .hideCurrentSnackBar();
-                                                },
-                                              ),
-                                            );
+                                              var snackBar = SnackBar(
+                                                content: Text(localizations
+                                                    .downloading_fw(
+                                                        chameleonDeviceName(
+                                                            chameleonDevice
+                                                                .device))),
+                                                action: SnackBarAction(
+                                                  label: localizations.close,
+                                                  onPressed: () {
+                                                    scaffoldMessenger
+                                                        .hideCurrentSnackBar();
+                                                  },
+                                                ),
+                                              );
 
-                                            scaffoldMessenger
-                                                .showSnackBar(snackBar);
+                                              scaffoldMessenger
+                                                  .showSnackBar(snackBar);
 
-                                            await flashFirmware(appState,
-                                                scaffoldMessenger:
-                                                    scaffoldMessenger,
-                                                device: chameleonDevice.device,
-                                                enterDFU: false);
+                                              await flashFirmware(appState,
+                                                  scaffoldMessenger:
+                                                      scaffoldMessenger,
+                                                  device:
+                                                      chameleonDevice.device,
+                                                  enterDFU: false);
 
-                                            appState.changesMade();
-                                          },
-                                          child: Text(localizations.flash),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                } else {
-                                  if (chameleonDevice.type ==
-                                      ConnectionType.ble) {
-                                    appState.connector!.pendingConnection =
-                                        true;
-                                    appState.changesMade();
-                                  }
-                                  await appState.connector!
-                                      .connectSpecificDevice(
-                                          chameleonDevice.port);
-                                  appState.communicator = ChameleonCommunicator(
-                                      appState.log!,
-                                      port: appState.connector);
-                                  appState.connector!.pendingConnection = false;
-                                  appState.changesMade();
-                                }
-                              },
-                              style: ButtonStyle(
-                                shape: MaterialStateProperty.all<
-                                    RoundedRectangleBorder>(
-                                  RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18.0),
-                                  ),
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: FittedBox(
-                                      alignment: Alignment.centerRight,
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment
-                                            .end, // Align the inner Row's children to the right
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.end,
-                                            children: [
-                                              chameleonDevice.type ==
-                                                      ConnectionType.ble
-                                                  ? const Icon(Icons.bluetooth)
-                                                  : const Icon(Icons.usb),
-                                              Text(chameleonDevice.port ?? ""),
-                                              if (chameleonDevice.dfu)
-                                                Text(localizations.dfu),
-                                            ],
-                                          )
+                                              appState.changesMade();
+                                            },
+                                            child: Text(localizations.flash),
+                                          ),
                                         ],
                                       ),
+                                    );
+                                  } else {
+                                    if (chameleonDevice.type ==
+                                        ConnectionType.ble) {
+                                      appState.connector!.pendingConnection =
+                                          true;
+                                      appState.changesMade();
+                                    }
+                                    await appState.connector!
+                                        .connectSpecificDevice(
+                                            chameleonDevice.port);
+                                    appState.communicator =
+                                        ChameleonCommunicator(appState.log!,
+                                            port: appState.connector);
+                                    appState.connector!.pendingConnection =
+                                        false;
+                                    appState.changesMade();
+                                  }
+                                },
+                                style: ButtonStyle(
+                                  shape: MaterialStateProperty.all<
+                                      RoundedRectangleBorder>(
+                                    RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18.0),
                                     ),
                                   ),
-                                  FittedBox(
-                                      alignment: Alignment.topRight,
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                              "Chameleon ${chameleonDeviceName(chameleonDevice.device)}",
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 20)),
-                                        ],
-                                      )),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                      flex: 1,
-                                      child: Image.asset(
-                                        chameleonDevice.device ==
-                                                ChameleonDevice.ultra
-                                            ? 'assets/black-ultra-standing-front.webp'
-                                            : 'assets/black-lite-standing-front.webp',
-                                        fit: BoxFit.fitHeight,
-                                      )),
-                                  const SizedBox(height: 8),
-                                ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: FittedBox(
+                                        alignment: Alignment.centerRight,
+                                        fit: BoxFit.scaleDown,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment
+                                              .end, // Align the inner Row's children to the right
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                chameleonDevice.type ==
+                                                        ConnectionType.ble
+                                                    ? const Icon(
+                                                        Icons.bluetooth)
+                                                    : const Icon(Icons.usb),
+                                                Text(
+                                                    chameleonDevice.port ?? ""),
+                                                if (chameleonDevice.dfu)
+                                                  Text(localizations.dfu),
+                                              ],
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    FittedBox(
+                                        alignment: Alignment.topRight,
+                                        fit: BoxFit.scaleDown,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                                "Chameleon ${chameleonDeviceName(chameleonDevice.device)}",
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 20)),
+                                          ],
+                                        )),
+                                    const SizedBox(height: 8),
+                                    Expanded(
+                                        flex: 1,
+                                        child: Image.asset(
+                                          chameleonDevice.device ==
+                                                  ChameleonDevice.ultra
+                                              ? 'assets/black-ultra-standing-front.webp'
+                                              : 'assets/black-lite-standing-front.webp',
+                                          fit: BoxFit.fitHeight,
+                                        )),
+                                    const SizedBox(height: 8),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ]),
+                    )
+                  else
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.of(context).size.height * 0.3,
+                            ),
+                            child: Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(1000),
                               ),
-                            );
-                          }),
-                        ]),
-                  ),
+                              child: LayoutBuilder(
+                                builder: (BuildContext context,
+                                    BoxConstraints constraints) {
+                                  return Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        constraints: BoxConstraints(
+                                          maxWidth: constraints.maxWidth * 0.4,
+                                        ),
+                                        child: Image.asset('assets/plugin.gif'),
+                                      ),
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: constraints.maxWidth * 0.5,
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text(
+                                            "Connect your Chameleon", //TODO: Localize
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleLarge,
+                                            textAlign: TextAlign.center,
+                                            maxLines: 4,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),

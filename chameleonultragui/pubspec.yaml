@@ -110,7 +110,7 @@ flutter:
     - assets/logo.png
     - assets/black-ultra-standing-front-flashing.webp
     - assets/black-lite-standing-front-flashing.webp
-
+    - assets/plugin.gif
   fonts:
     - family: RobotoMono
       fonts:
